@@ -30,13 +30,49 @@ export const PdfView: React.FC = () => {
   // Ensure we always use HTTPS
   const secureUrl = file?.url ? file.url.replace(/^http:\/\//, 'https://') : '';
 
-  const handleCopyDownloadLink = () => {
+  const handleCopyDownloadLink = async () => {
     if (!secureUrl) return;
-    navigator.clipboard.writeText(secureUrl).then(() => {
+
+    let success = false;
+
+    // 尝试方案 A: 现代 Clipboard API
+    // 注意：在 iframe 中通常需要父级设置 allow="clipboard-write"
+    try {
+      await navigator.clipboard.writeText(secureUrl);
+      success = true;
+    } catch (err) {
+      console.warn("Clipboard API failed (likely iframe permission issue), trying fallback...", err);
+      
+      // 尝试方案 B: 传统 execCommand (兼容性更好，通常不需要特定 iframe 权限)
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = secureUrl;
+        
+        // 确保元素不可见但存在于 DOM 中，且位置固定避免滚动页面
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        
+        textArea.focus();
+        textArea.select();
+        
+        // 执行旧版复制命令
+        success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (e) {
+        console.error("Fallback copy failed:", e);
+      }
+    }
+
+    if (success) {
       setCopied(true);
-      // Reset after 3 seconds to give user time to read the message
       setTimeout(() => setCopied(false), 3000);
-    });
+    } else {
+      // 方案 C: 彻底失败时 (极少数严格的安全环境)，弹窗让用户手动复制
+      window.prompt("由于浏览器安全限制，请手动复制以下链接：", secureUrl);
+    }
   };
 
   // Determine file type and viewer URL
