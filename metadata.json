@@ -1,0 +1,5 @@
+{
+  "name": "番茄快传 PDF",
+  "description": "上传PDF文档到云端，生成跨设备浏览的在线链接。",
+  "requestFramePermissions": []
+}
