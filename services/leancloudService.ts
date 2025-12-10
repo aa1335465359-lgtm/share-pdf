@@ -6,6 +6,9 @@ const APP_ID = "jjnp8qOyNxf5TEJzi6yB8PUW-MdYXbMMI";
 const APP_KEY = "p5nvjY3eAN5jcNdWINoJDp82";
 const SERVER_URL = "https://jjnp8qoy.api.lncldglobal.com";
 
+// Target file domain requested by user
+const TARGET_FILE_DOMAIN = "pdfsharezeph.oss-cn-hangzhou.aliyuncs.com";
+
 // Safer initialization check
 if (!AV.applicationId) {
   try {
@@ -18,6 +21,20 @@ if (!AV.applicationId) {
     console.error("LeanCloud initialization failed:", error);
   }
 }
+
+// Helper to swap domain to the target OSS domain
+const enforceTargetDomain = (originalUrl: string | undefined): string => {
+  if (!originalUrl) return '';
+  try {
+    const urlObj = new URL(originalUrl);
+    urlObj.hostname = TARGET_FILE_DOMAIN;
+    urlObj.protocol = 'https:';
+    return urlObj.toString();
+  } catch (e) {
+    // If URL parsing fails, just return original but try to upgrade protocol
+    return originalUrl ? originalUrl.replace(/^http:\/\//, 'https://') : '';
+  }
+};
 
 // Renamed from uploadPdf to uploadFile for clarity
 export const uploadFile = async (
@@ -36,18 +53,16 @@ export const uploadFile = async (
       }
     });
 
-    // Ensure URL is HTTPS to prevent mixed content blocking in browsers
-    let fileUrl = savedFile.url();
-    if (fileUrl && fileUrl.startsWith('http://')) {
-      fileUrl = fileUrl.replace('http://', 'https://');
-    }
+    // Get original URL and swap domain
+    const originalUrl = savedFile.url();
+    const fileUrl = enforceTargetDomain(originalUrl);
 
     // Use 'SharedPDF' table for compatibility, but it now stores Excel too.
     const PDFShare = AV.Object.extend('SharedPDF');
     const fileShare = new PDFShare();
     
     fileShare.set('name', savedFile.get('name'));
-    fileShare.set('url', fileUrl);
+    fileShare.set('url', fileUrl); // Save the new URL with custom domain
     fileShare.set('size', savedFile.size());
     fileShare.set('fileId', savedFile.id); 
     // Store mime-type if available, or infer from file
@@ -82,11 +97,10 @@ export const getFileInfo = async (objectId: string): Promise<UploadedFile | null
     
     if (!shareObj) return null;
 
-    // Ensure HTTPS on retrieval as well, for legacy records
-    let fileUrl = shareObj.get('url');
-    if (fileUrl && fileUrl.startsWith('http://')) {
-      fileUrl = fileUrl.replace('http://', 'https://');
-    }
+    // Retrieve stored URL
+    let storedUrl = shareObj.get('url');
+    // Enforce target domain again just in case (e.g. for old records)
+    const fileUrl = enforceTargetDomain(storedUrl);
 
     return {
       objectId: shareObj.id!,
